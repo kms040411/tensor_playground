@@ -1,58 +1,94 @@
-import numpy as np
-import torch
-from tensor_viewer.ops import print_dist
-import random
+from quant_test import *
+import sys
 
 DIM_M = 1024
 DIM_N = 3072
 NORM_MEAN = 0.0
 NORM_STD = 1.0
 
-OUTLIER_NUM = int(DIM_M * DIM_N * 0.005)
+OUTLIER_NUM = int(DIM_M * DIM_N * 0.001)
+MAX_SWEEP_NUM = 10000
 
-# Generate Original Tensor
-tensor = torch.empty(DIM_M, DIM_N, dtype=torch.float)
-torch.nn.init.normal_(tensor, mean=NORM_MEAN, std=NORM_STD)
-#print_dist(tensor, None)
+#SCALING_FACTOR_PROPOSED = 1200
+#SCALING_FACTOR_NAIVE = 50
 
-outlier_list = list()
-for i in range(OUTLIER_NUM):
-    outlier_list.append((random.randint(0, DIM_M-1), random.randint(0, DIM_N-1)))
-for outlier in outlier_list:
-    tensor[outlier[0], outlier[1]] = random.uniform(-20, 20)
+tensor = tensor_gen(DIM_M, DIM_N, NORM_MEAN, NORM_STD, OUTLIER_NUM)
 
-# Proposed Solution
-SCALING_FACTOR_PROPOSED = 1200
-a_vec = torch.max(tensor, dim=1)[0] # size of DIM_M
-b_vec = torch.max(tensor, dim=0)[0] # size of DIM_N
+proposed_results_x = list()
+proposed_results_y = list()
+for scaling_factor in range(300, 1000, 50):
+    tensor_proposed, a_vec, b_vec = proposed_quant(tensor, scaling_factor)
+    restore_proposed = proposed_restore(tensor_proposed, a_vec, b_vec, scaling_factor)
+    proposed_error = get_mse(tensor, restore_proposed)
 
-a_vec = a_vec.unsqueeze(dim=1)
-b_vec = b_vec.unsqueeze(dim=0)
+    proposed_results_x.append(scaling_factor)
+    proposed_results_y.append(proposed_error)
 
-tensor_proposed = tensor * SCALING_FACTOR_PROPOSED
-tensor_proposed = (tensor_proposed / a_vec) / b_vec
-tensor_proposed = tensor_proposed.to(dtype=torch.int8)
+naive_results_x = list()
+naive_results_y = list()
+for scaling_factor in range(0, 20, 1):
+    tensor_naive = naive_quant(tensor, scaling_factor)
+    restore_naive = naive_restore(tensor_naive, scaling_factor)
+    naive_error = get_mse(tensor, restore_naive)
 
-# Naive Solution
-SCALING_FACTOR_NAIVE = 50
+    naive_results_x.append(scaling_factor)
+    naive_results_y.append(naive_error)
 
-naive_tensor = tensor * SCALING_FACTOR_NAIVE
-naive_tensor = naive_tensor.to(dtype=torch.int8)
+# scaling_factor_proposed = 10.0
+# current_jump = 10.0
+# current_err = sys.float_info.max
+# counter = 0
+# while True:
+#     tensor_proposed, a_vec, b_vec = proposed_quant(tensor, scaling_factor_proposed)
+#     restore_proposed = proposed_restore(tensor_proposed, a_vec, b_vec, scaling_factor_proposed)
+#     proposed_error = get_mse(tensor, restore_proposed)
 
-# Get error of proposed solution
-restore_proposed = tensor_proposed.to(dtype=torch.float16)
-restore_proposed = restore_proposed / SCALING_FACTOR_PROPOSED
-restore_proposed = ((restore_proposed * b_vec) * a_vec)
+#     if proposed_error < current_err:
+#         scaling_factor_proposed += current_jump
+#         current_jump = current_jump * 1.5
+#         current_err = proposed_error
+#     elif proposed_error == current_err:
+#         print(f"current count: {counter}, current jump: {current_jump}, current err: {current_err}, current scaling factor: {scaling_factor_proposed}")
+#         break
+#     else:
+#         current_jump = current_jump * -0.5
+#         scaling_factor_proposed += current_jump
+#         current_err = proposed_error
 
-# Get error of naive solution
-restore_naive = naive_tensor.to(dtype=torch.float16)
-restore_naive = restore_naive / SCALING_FACTOR_NAIVE
+#     if counter % 100 == 0:
+#         print(f"current count: {counter}, current jump: {current_jump}, current err: {current_err}, current scaling factor: {scaling_factor_proposed}")
 
-naive_error = torch.nn.functional.mse_loss(tensor, restore_naive)
-print(f"naive_error: {naive_error}")
-proposed_error = torch.nn.functional.mse_loss(tensor, restore_proposed)
-print(f"proposed_error: {proposed_error}")
+#     counter += 1
+#     if counter > MAX_SWEEP_NUM: break
+    
+# print(f"Final proposed error: {current_err}, Final scaling factor: {scaling_factor_proposed}")
+# print(f"")
 
-# print_dist(tensor, None)
-# print_dist(restore_naive, None)
-# print_dist(restore_proposed, None)
+# scaling_factor_naive = 10.0
+# current_jump = 1.0
+# current_err = sys.float_info.max
+# counter = 0
+# while True:
+#     tensor_naive = naive_quant(tensor, scaling_factor_naive)
+#     restore_naive = naive_restore(tensor_naive, scaling_factor_naive)
+#     naive_error = get_mse(tensor, restore_naive)
+
+#     if naive_error < current_err:
+#         scaling_factor_naive += current_jump
+#         current_jump = current_jump * 1.5
+#         current_err = naive_error 
+#     elif naive_error == current_err:
+#         print(f"current count: {counter}, current jump: {current_jump}, current err: {current_err}, current scaling factor: {scaling_factor_naive}")
+#         break
+#     else:
+#         current_jump = current_jump * -0.5
+#         scaling_factor_naive += current_jump
+#         current_err = naive_error
+
+#     if counter % 100 == 0:
+#         print(f"current count: {counter}, current jump: {current_jump}, current err: {current_err}, current scaling factor: {scaling_factor_naive}")
+
+#     counter += 1
+#     if counter > MAX_SWEEP_NUM: break
+
+# print(f"Final naive error: {current_err}, Final scaling factor: {scaling_factor_naive}")
