@@ -12,7 +12,8 @@ MAX_SWEEP_NUM = 10000
 #SCALING_FACTOR_PROPOSED = 1200
 #SCALING_FACTOR_NAIVE = 50
 
-tensor = tensor_gen(DIM_M, DIM_N, NORM_MEAN, NORM_STD, OUTLIER_NUM)
+model = load("/data/hyperaccel/model/megatron-gpt2-345m/ckpt/pytorch_model.bin")
+tensor = model["lm_head.weight"] #tensor_gen(DIM_M, DIM_N, NORM_MEAN, NORM_STD, OUTLIER_NUM)
 
 proposed_results_x = list()
 proposed_results_y = list()

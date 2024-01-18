@@ -2,6 +2,10 @@ import numpy as np
 import torch
 import random
 
+def load(filename: str) -> dict:
+    ckpt = torch.load(filename)
+    return ckpt
+
 def tensor_gen(dim_m, dim_n, mean, std, outlier_num):
     tensor = torch.empty(dim_m, dim_n, dtype=torch.float)
     torch.nn.init.normal_(tensor, mean, std)
